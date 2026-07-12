@@ -1,0 +1,14 @@
+{
+  "name": "家族スケジュール",
+  "short_name": "家族予定",
+  "description": "真一・香保里・凛・新・糸の家族スケジュール共有アプリ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}
