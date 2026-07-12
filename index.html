@@ -134,9 +134,13 @@
       <label>タイトル</label>
       <input type="text" id="fTitle" placeholder="例:凛の授業参観">
     </div>
+    <div class="switch-row">
+      <span>📅 終日(単日の予定)</span>
+      <div class="toggle on" id="toggleAllDay"></div>
+    </div>
     <div class="row2">
       <div class="field"><label>開始日</label><input type="date" id="fDate"></div>
-      <div class="field"><label>終了日(複数日の場合のみ)</label><input type="date" id="fEndDate"></div>
+      <div class="field" id="endDateField" style="display:none;"><label>終了日</label><input type="date" id="fEndDate"></div>
     </div>
     <div class="row2">
       <div class="field"><label>開始時刻(任意)</label><input type="time" id="fStart"></div>
@@ -192,7 +196,9 @@ const PEOPLE = [
   {id:'新', color:'var(--orange)', hex:'#f97316'},
   {id:'糸', color:'var(--purple)', hex:'#a855f7'},
 ];
-const personHex = id => (PEOPLE.find(p => p.id === id) || {}).hex || '#9ca3af';
+const FAMILY_ID = 'family';
+const FAMILY_HEX = '#64748b';
+const personHex = id => id === FAMILY_ID ? FAMILY_HEX : (PEOPLE.find(p => p.id === id) || {}).hex || '#9ca3af';
 
 let db = null;
 let events = [];
@@ -236,6 +242,8 @@ function init(){
   document.getElementById('btnTestLine').onclick = sendTestLine;
   document.getElementById('toggleWork').onclick = ()=> toggleClass('toggleWork');
   document.getElementById('toggleNotify').onclick = ()=> toggleClass('toggleNotify');
+  document.getElementById('toggleAllDay').onclick = ()=>{ toggleClass('toggleAllDay'); updateAllDayUI(); };
+  document.getElementById('fDate').oninput = updateAllDayUI;
   document.getElementById('settingsSheetBg').onclick = e=>{ if(e.target.id==='settingsSheetBg') closeSettingsSheet(); };
   document.getElementById('eventSheetBg').onclick = e=>{ if(e.target.id==='eventSheetBg') closeEventSheet(); };
 
@@ -257,6 +265,14 @@ function init(){
 
 function toggleClass(id){
   document.getElementById(id).classList.toggle('on');
+}
+
+function updateAllDayUI(){
+  const on = document.getElementById('toggleAllDay').classList.contains('on');
+  document.getElementById('endDateField').style.display = on ? 'none' : '';
+  if(on){
+    document.getElementById('fEndDate').value = document.getElementById('fDate').value;
+  }
 }
 
 function showSetupPrompt(){
@@ -306,7 +322,7 @@ function renderFilters(){
 
 function visibleEvents(){
   if(filterPerson === 'all') return events;
-  return events.filter(ev => (ev.people||[]).includes(filterPerson));
+  return events.filter(ev => (ev.people||[]).includes(filterPerson) || (ev.people||[]).includes(FAMILY_ID));
 }
 
 function eventsForDay(dateStr){
@@ -393,7 +409,8 @@ function escapeHtml(s){
 // ---------- 予定追加/編集 ----------
 function buildPeoplePicker(){
   const wrap = document.getElementById('peoplePicker');
-  wrap.innerHTML = PEOPLE.map(p=>`<div class="ptag" data-id="${p.id}" data-hex="${p.hex}">${p.id}</div>`).join('');
+  const items = [...PEOPLE, {id:FAMILY_ID, hex:FAMILY_HEX}];
+  wrap.innerHTML = items.map(p=>`<div class="ptag" data-id="${p.id}" data-hex="${p.hex}">${p.id}</div>`).join('');
   wrap.querySelectorAll('.ptag').forEach(el=>{
     el.onclick = ()=>{
       el.classList.toggle('on');
@@ -419,10 +436,14 @@ function openEventSheet(id){
   document.getElementById('toggleNotify').classList.toggle('on', ev ? !!ev.notify : true);
   document.getElementById('fTitle').value = ev ? (ev.title||'') : '';
   document.getElementById('fDate').value = ev ? ev.date : selectedDate;
-  document.getElementById('fEndDate').value = ev ? (ev.endDate||'') : '';
+  document.getElementById('fEndDate').value = ev ? (ev.endDate || ev.date) : selectedDate;
   document.getElementById('fStart').value = ev ? (ev.startTime||'') : '';
   document.getElementById('fEnd').value = ev ? (ev.endTime||'') : '';
   document.getElementById('fMemo').value = ev ? (ev.memo||'') : '';
+
+  const isMultiDay = !!(ev && ev.endDate && ev.endDate !== ev.date);
+  document.getElementById('toggleAllDay').classList.toggle('on', !isMultiDay);
+  updateAllDayUI();
 
   document.getElementById('eventSheetBg').classList.add('show');
 }
@@ -436,12 +457,13 @@ function saveEvent(){
   const isWork = document.getElementById('toggleWork').classList.contains('on');
   const title = document.getElementById('fTitle').value.trim() || (isWork ? '仕事' : '');
   const date = document.getElementById('fDate').value;
-  const endDate = document.getElementById('fEndDate').value || '';
+  const allDay = document.getElementById('toggleAllDay').classList.contains('on');
+  const endDate = allDay ? date : (document.getElementById('fEndDate').value || date);
 
   if(people.length===0 && !isWork){ toast('対象メンバーを選んでください'); return; }
   if(!date){ toast('日付を入力してください'); return; }
   if(!title){ toast('タイトルを入力してください'); return; }
-  if(endDate && endDate < date){ toast('終了日は開始日より後にしてください'); return; }
+  if(!allDay && endDate < date){ toast('終了日は開始日より後にしてください'); return; }
 
   const finalPeople = isWork ? Array.from(new Set(['香保里', ...people])) : people;
 
