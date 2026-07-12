@@ -134,9 +134,9 @@
       <label>タイトル</label>
       <input type="text" id="fTitle" placeholder="例:凛の授業参観">
     </div>
-    <div class="field">
-      <label>日付</label>
-      <input type="date" id="fDate">
+    <div class="row2">
+      <div class="field"><label>開始日</label><input type="date" id="fDate"></div>
+      <div class="field"><label>終了日(複数日の場合のみ)</label><input type="date" id="fEndDate"></div>
     </div>
     <div class="row2">
       <div class="field"><label>開始時刻(任意)</label><input type="time" id="fStart"></div>
@@ -207,6 +207,10 @@ function fmtDate(d){
   return `${y}-${m}-${day}`;
 }
 function todayStr(){ return fmtDate(new Date()); }
+function fmtShort(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -305,6 +309,10 @@ function visibleEvents(){
   return events.filter(ev => (ev.people||[]).includes(filterPerson));
 }
 
+function eventsForDay(dateStr){
+  return visibleEvents().filter(ev => dateStr >= ev.date && dateStr <= (ev.endDate || ev.date));
+}
+
 // ---------- カレンダー描画 ----------
 function changeMonth(delta){
   viewMonth += delta;
@@ -321,11 +329,6 @@ function renderMonth(){
   const daysInPrev = new Date(viewYear, viewMonth, 0).getDate();
   const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
 
-  const evByDate = {};
-  visibleEvents().forEach(ev=>{
-    (evByDate[ev.date] = evByDate[ev.date] || []).push(ev);
-  });
-
   let html = '';
   for(let i=0;i<totalCells;i++){
     const dayNum = i - firstDow + 1;
@@ -335,7 +338,7 @@ function renderMonth(){
     else { cellDay = dayNum; }
     const dateStr = `${cellYear}-${String(cellMonth+1).padStart(2,'0')}-${String(cellDay).padStart(2,'0')}`;
     const dow = i % 7;
-    const dayEvents = (evByDate[dateStr]||[]).sort((a,b)=> (a.startTime||'').localeCompare(b.startTime||''));
+    const dayEvents = eventsForDay(dateStr).sort((a,b)=> (a.startTime||'').localeCompare(b.startTime||''));
     const classes = ['day'];
     if(out) classes.push('out');
     if(dateStr === todayStr()) classes.push('today');
@@ -361,18 +364,19 @@ function renderMonth(){
 function renderDayList(){
   const d = new Date(selectedDate + 'T00:00:00');
   document.getElementById('dayLabel').textContent = `${d.getMonth()+1}月${d.getDate()}日(${['日','月','火','水','木','金','土'][d.getDay()]})の予定`;
-  const list = visibleEvents().filter(ev=>ev.date===selectedDate).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
+  const list = eventsForDay(selectedDate).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
   const wrap = document.getElementById('dayList');
   if(list.length===0){ wrap.innerHTML = `<div class="empty">予定はありません</div>`; return; }
   wrap.innerHTML = list.map(ev=>{
     const c = ev.type==='work' ? '#ec4899' : personHex(ev.people && ev.people[0]);
     const time = ev.startTime ? `${ev.startTime}${ev.endTime? '〜'+ev.endTime:''}` : '終日';
     const people = (ev.people||[]).join('・');
+    const range = (ev.endDate && ev.endDate !== ev.date) ? `${fmtShort(ev.date)}〜${fmtShort(ev.endDate)} ・ ` : '';
     return `<div class="ev-item" data-id="${ev.id}">
       <div class="ev-color" style="background:${c}"></div>
       <div class="ev-body">
         <div class="ev-title">${ev.type==='work'?'💼 ':''}${escapeHtml(ev.title||'')}</div>
-        <div class="ev-meta">${time} ・ ${escapeHtml(people)}${ev.memo?' ・ '+escapeHtml(ev.memo):''}</div>
+        <div class="ev-meta">${range}${time} ・ ${escapeHtml(people)}${ev.memo?' ・ '+escapeHtml(ev.memo):''}</div>
       </div>
       <button data-edit="${ev.id}">✏️</button>
     </div>`;
@@ -415,6 +419,7 @@ function openEventSheet(id){
   document.getElementById('toggleNotify').classList.toggle('on', ev ? !!ev.notify : true);
   document.getElementById('fTitle').value = ev ? (ev.title||'') : '';
   document.getElementById('fDate').value = ev ? ev.date : selectedDate;
+  document.getElementById('fEndDate').value = ev ? (ev.endDate||'') : '';
   document.getElementById('fStart').value = ev ? (ev.startTime||'') : '';
   document.getElementById('fEnd').value = ev ? (ev.endTime||'') : '';
   document.getElementById('fMemo').value = ev ? (ev.memo||'') : '';
@@ -431,10 +436,12 @@ function saveEvent(){
   const isWork = document.getElementById('toggleWork').classList.contains('on');
   const title = document.getElementById('fTitle').value.trim() || (isWork ? '仕事' : '');
   const date = document.getElementById('fDate').value;
+  const endDate = document.getElementById('fEndDate').value || '';
 
   if(people.length===0 && !isWork){ toast('対象メンバーを選んでください'); return; }
   if(!date){ toast('日付を入力してください'); return; }
   if(!title){ toast('タイトルを入力してください'); return; }
+  if(endDate && endDate < date){ toast('終了日は開始日より後にしてください'); return; }
 
   const finalPeople = isWork ? Array.from(new Set(['香保里', ...people])) : people;
 
@@ -443,6 +450,7 @@ function saveEvent(){
     type: isWork ? 'work' : 'event',
     title,
     date,
+    endDate,
     startTime: document.getElementById('fStart').value || '',
     endTime: document.getElementById('fEnd').value || '',
     memo: document.getElementById('fMemo').value.trim(),
