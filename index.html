@@ -204,10 +204,12 @@ function eventColor(ev){
   if(ev.type==='work') return '#ec4899';
   if(ev.type==='holiday') return '#dc2626';
   if(ev.type==='birthday') return '#f59e0b';
+  if(ev.type==='memorial') return '#78716c';
+  if(ev.type==='anniversary') return '#0ea5e9';
   return personHex(ev.people && ev.people[0]);
 }
 
-// ---------- 誕生日・祝日(毎年繰り返す既定の予定。Firestoreには保存せず毎回計算) ----------
+// ---------- 誕生日・命日・記念日・祝日(毎年繰り返す既定の予定。Firestoreには保存せず毎回計算) ----------
 const BIRTHDAYS = [
   {month:9, day:13, name:'真一'},
   {month:5, day:11, name:'香保里'},
@@ -219,6 +221,16 @@ const BIRTHDAYS = [
   {month:7, day:27, name:'山口父'},
   {month:3, day:10, name:'父'},
   {month:6, day:14, name:'母'},
+  {month:4, day:9, name:'jaya'},
+  {month:6, day:6, name:'りくとくん'},
+  {month:12, day:14, name:'ほのちゃん'},
+];
+const MEMORIALS = [
+  {month:6, day:20, name:'おばあさん'},
+  {month:3, day:8, name:'山口母'},
+];
+const ANNIVERSARIES = [
+  {month:4, day:8, title:'結婚記念日'},
 ];
 
 function nthWeekday(year, month, n, weekday){
@@ -265,6 +277,14 @@ function specialEventsForYear(year){
   BIRTHDAYS.forEach(b=>{
     const date = `${year}-${pad2(b.month)}-${pad2(b.day)}`;
     list.push({id:`sp-bd-${year}-${b.month}-${b.day}-${b.name}`, people:[FAMILY_ID], type:'birthday', title:`🎂 ${b.name}の誕生日`, date, endDate:date, startTime:'', endTime:'', memo:'', notify:false, special:true});
+  });
+  MEMORIALS.forEach(m=>{
+    const date = `${year}-${pad2(m.month)}-${pad2(m.day)}`;
+    list.push({id:`sp-mm-${year}-${m.month}-${m.day}-${m.name}`, people:[FAMILY_ID], type:'memorial', title:`🙏 ${m.name}の命日`, date, endDate:date, startTime:'', endTime:'', memo:'', notify:false, special:true});
+  });
+  ANNIVERSARIES.forEach(a=>{
+    const date = `${year}-${pad2(a.month)}-${pad2(a.day)}`;
+    list.push({id:`sp-an-${year}-${a.month}-${a.day}`, people:[FAMILY_ID], type:'anniversary', title:`💍 ${a.title}`, date, endDate:date, startTime:'', endTime:'', memo:'', notify:false, special:true});
   });
   japanHolidays(year).forEach(h=>{
     const date = `${year}-${pad2(h.month)}-${pad2(h.day)}`;
