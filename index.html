@@ -200,6 +200,84 @@ const PEOPLE = [
 const FAMILY_ID = 'family';
 const FAMILY_HEX = '#64748b';
 const personHex = id => id === FAMILY_ID ? FAMILY_HEX : (PEOPLE.find(p => p.id === id) || {}).hex || '#9ca3af';
+function eventColor(ev){
+  if(ev.type==='work') return '#ec4899';
+  if(ev.type==='holiday') return '#dc2626';
+  if(ev.type==='birthday') return '#f59e0b';
+  return personHex(ev.people && ev.people[0]);
+}
+
+// ---------- 誕生日・祝日(毎年繰り返す既定の予定。Firestoreには保存せず毎回計算) ----------
+const BIRTHDAYS = [
+  {month:9, day:13, name:'真一'},
+  {month:5, day:11, name:'香保里'},
+  {month:4, day:1, name:'凛'},
+  {month:7, day:3, name:'新'},
+  {month:12, day:18, name:'糸'},
+  {month:6, day:14, name:'むぎ'},
+  {month:1, day:11, name:'しおり'},
+  {month:7, day:27, name:'山口父'},
+  {month:3, day:10, name:'父'},
+  {month:6, day:14, name:'母'},
+];
+
+function nthWeekday(year, month, n, weekday){
+  const d = new Date(year, month-1, 1);
+  let count = 0;
+  while(d.getMonth() === month-1){
+    if(d.getDay() === weekday){ count++; if(count===n) return d.getDate(); }
+    d.setDate(d.getDate()+1);
+  }
+  return null;
+}
+function shunbunDay(year){ return Math.floor(20.8431 + 0.242194*(year-1980) - Math.floor((year-1980)/4)); }
+function shuubunDay(year){ return Math.floor(23.2488 + 0.242194*(year-1980) - Math.floor((year-1980)/4)); }
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function japanHolidays(year){
+  const H = [];
+  const add = (m,d,name)=> H.push({month:m, day:d, name});
+  add(1,1,'元日');
+  add(1, nthWeekday(year,1,2,1), '成人の日');
+  add(2,11,'建国記念の日');
+  add(2,23,'天皇誕生日');
+  add(3, shunbunDay(year), '春分の日');
+  add(4,29,'昭和の日');
+  add(5,3,'憲法記念日');
+  add(5,4,'みどりの日');
+  add(5,5,'こどもの日');
+  add(5, nthWeekday(year,5,2,0), '母の日');
+  add(6, nthWeekday(year,6,3,0), '父の日');
+  add(7, nthWeekday(year,7,3,1), '海の日');
+  add(8,11,'山の日');
+  add(9, nthWeekday(year,9,3,1), '敬老の日');
+  add(9, shuubunDay(year), '秋分の日');
+  add(10, nthWeekday(year,10,2,1), 'スポーツの日');
+  add(11,3,'文化の日');
+  add(11,23,'勤労感謝の日');
+  return H;
+}
+
+const specialCache = {};
+function specialEventsForYear(year){
+  if(specialCache[year]) return specialCache[year];
+  const list = [];
+  BIRTHDAYS.forEach(b=>{
+    const date = `${year}-${pad2(b.month)}-${pad2(b.day)}`;
+    list.push({id:`sp-bd-${year}-${b.month}-${b.day}-${b.name}`, people:[FAMILY_ID], type:'birthday', title:`🎂 ${b.name}の誕生日`, date, endDate:date, startTime:'', endTime:'', memo:'', notify:false, special:true});
+  });
+  japanHolidays(year).forEach(h=>{
+    const date = `${year}-${pad2(h.month)}-${pad2(h.day)}`;
+    list.push({id:`sp-hd-${year}-${h.month}-${h.day}`, people:[FAMILY_ID], type:'holiday', title:h.name, date, endDate:date, startTime:'', endTime:'', memo:'', notify:false, special:true});
+  });
+  specialCache[year] = list;
+  return list;
+}
+function displayEventsForYears(years){
+  let list = visibleEvents();
+  years.forEach(y=>{ list = list.concat(specialEventsForYear(y)); });
+  return list;
+}
 
 let db = null;
 let events = [];
@@ -327,7 +405,8 @@ function visibleEvents(){
 }
 
 function eventsForDay(dateStr){
-  return visibleEvents().filter(ev => dateStr >= ev.date && dateStr <= (ev.endDate || ev.date));
+  const year = Number(dateStr.slice(0,4));
+  return displayEventsForYears([year]).filter(ev => dateStr >= ev.date && dateStr <= (ev.endDate || ev.date));
 }
 
 // ---------- カレンダー描画 ----------
@@ -357,7 +436,8 @@ function renderMonth(){
     cells.push({dateStr, cellDay, out});
   }
 
-  const evs = visibleEvents();
+  const years = [...new Set(cells.map(c=>Number(c.dateStr.slice(0,4))))];
+  const evs = displayEventsForYears(years);
   let html = '';
   for(let w=0; w*7<cells.length; w++){
     const week = cells.slice(w*7, w*7+7);
@@ -406,11 +486,11 @@ function renderMonth(){
 
     segments.forEach(seg=>{
       const ev = seg.ev;
-      const c = ev.type==='work' ? '#ec4899' : personHex(ev.people && ev.people[0]);
+      const c = eventColor(ev);
       const cornerClasses = [];
       if(!seg.isActualStart) cornerClasses.push('no-left-round');
       if(!seg.isActualEnd) cornerClasses.push('no-right-round');
-      weekHtml += `<div class="band ${cornerClasses.join(' ')}" data-id="${ev.id}" style="grid-column:${seg.startCol+1} / ${seg.endCol+2}; grid-row:${seg.lane+2}; background:${c};">${ev.type==='work'?'💼 ':''}${escapeHtml(ev.title||'')}</div>`;
+      weekHtml += `<div class="band ${cornerClasses.join(' ')}" data-id="${ev.id}" ${ev.special?'data-special="1"':''} style="grid-column:${seg.startCol+1} / ${seg.endCol+2}; grid-row:${seg.lane+2}; background:${c};">${ev.type==='work'?'💼 ':''}${escapeHtml(ev.title||'')}</div>`;
     });
 
     html += `<div class="week">${weekHtml}</div>`;
@@ -420,7 +500,10 @@ function renderMonth(){
     el.onclick = ()=>{ selectedDate = el.dataset.date; renderMonth(); renderDayList(); };
   });
   grid.querySelectorAll('.band').forEach(el=>{
-    el.onclick = ()=>{ openEventSheet(el.dataset.id); };
+    el.onclick = ()=>{
+      if(el.dataset.special === '1'){ toast('祝日・誕生日は自動表示のため編集できません'); return; }
+      openEventSheet(el.dataset.id);
+    };
   });
 }
 
@@ -431,17 +514,18 @@ function renderDayList(){
   const wrap = document.getElementById('dayList');
   if(list.length===0){ wrap.innerHTML = `<div class="empty">予定はありません</div>`; return; }
   wrap.innerHTML = list.map(ev=>{
-    const c = ev.type==='work' ? '#ec4899' : personHex(ev.people && ev.people[0]);
+    const c = eventColor(ev);
     const time = ev.startTime ? `${ev.startTime}${ev.endTime? '〜'+ev.endTime:''}` : '終日';
-    const people = (ev.people||[]).join('・');
-    const range = (ev.endDate && ev.endDate !== ev.date) ? `${fmtShort(ev.date)}〜${fmtShort(ev.endDate)} ・ ` : '';
+    const people = ev.special ? '' : (ev.people||[]).join('・');
+    const range = (ev.endDate && ev.endDate !== ev.date) ? `${fmtShort(ev.date)}〜${fmtShort(ev.endDate)}` : '';
+    const metaParts = [range, time, people, ev.memo].filter(Boolean).map(escapeHtml);
     return `<div class="ev-item" data-id="${ev.id}">
       <div class="ev-color" style="background:${c}"></div>
       <div class="ev-body">
         <div class="ev-title">${ev.type==='work'?'💼 ':''}${escapeHtml(ev.title||'')}</div>
-        <div class="ev-meta">${range}${time} ・ ${escapeHtml(people)}${ev.memo?' ・ '+escapeHtml(ev.memo):''}</div>
+        <div class="ev-meta">${metaParts.join(' ・ ')}</div>
       </div>
-      <button data-edit="${ev.id}">✏️</button>
+      ${ev.special ? '' : `<button data-edit="${ev.id}">✏️</button>`}
     </div>`;
   }).join('');
   wrap.querySelectorAll('[data-edit]').forEach(btn=>{
