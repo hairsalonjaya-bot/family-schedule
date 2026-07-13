@@ -85,7 +85,7 @@
 
   .setup-msg{max-width:420px; margin:60px auto; text-align:center; padding:0 24px; color:var(--sub); font-size:13.5px; line-height:1.7;}
   .setup-msg button{margin-top:16px;}
-  .toast{position:fixed; left:50%; bottom:100px; transform:translateX(-50%); background:#1f2333; color:#fff; font-size:13px; padding:10px 16px; border-radius:10px; z-index:99; opacity:0; transition:opacity .2s; pointer-events:none;}
+  .toast{position:fixed; left:50%; bottom:100px; transform:translateX(-50%); background:#1f2333; color:#fff; font-size:13px; padding:10px 16px; border-radius:10px; z-index:99; opacity:0; transition:opacity .2s; pointer-events:none; max-width:calc(100vw - 40px); text-align:center; box-sizing:border-box;}
   .toast.show{opacity:1;}
 </style>
 </head>
@@ -510,7 +510,8 @@ function renderMonth(){
       const cornerClasses = [];
       if(!seg.isActualStart) cornerClasses.push('no-left-round');
       if(!seg.isActualEnd) cornerClasses.push('no-right-round');
-      weekHtml += `<div class="band ${cornerClasses.join(' ')}" data-id="${ev.id}" ${ev.special?'data-special="1"':''} style="grid-column:${seg.startCol+1} / ${seg.endCol+2}; grid-row:${seg.lane+2}; background:${c};">${ev.type==='work'?'💼 ':''}${escapeHtml(ev.title||'')}</div>`;
+      const fullTitle = (ev.type==='work'?'💼 ':'') + (ev.title||'');
+      weekHtml += `<div class="band ${cornerClasses.join(' ')}" data-id="${ev.id}" data-title="${escapeHtml(fullTitle)}" ${ev.special?'data-special="1"':''} style="grid-column:${seg.startCol+1} / ${seg.endCol+2}; grid-row:${seg.lane+2}; background:${c};">${escapeHtml(fullTitle)}</div>`;
     });
 
     html += `<div class="week">${weekHtml}</div>`;
@@ -521,7 +522,7 @@ function renderMonth(){
   });
   grid.querySelectorAll('.band').forEach(el=>{
     el.onclick = ()=>{
-      if(el.dataset.special === '1'){ toast('祝日・誕生日は自動表示のため編集できません'); return; }
+      if(el.dataset.special === '1'){ toast(el.dataset.title); return; }
       openEventSheet(el.dataset.id);
     };
   });
